@@ -84,6 +84,7 @@ parts:
       - Source/Vendor/imgui_lua_bindings
     build-snaps:
       - cmake/latest/stable
+      - gnome-46-2404-sdk
     build-packages:
       - build-essential
       - libasound2-dev
