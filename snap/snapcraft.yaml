@@ -82,6 +82,8 @@ parts:
       - Source/Vendor/magic_enum
       - Source/Vendor/zlib
       - Source/Vendor/imgui_lua_bindings
+    build-snaps:
+      - cmake/latest/stable
     build-packages:
       - build-essential
       - libasound2-dev
@@ -95,15 +97,11 @@ parts:
       - libxinerama-dev
       - libxrandr-dev
       - libxxf86vm-dev
-      - python3-pip
     override-pull: |
       craftctl default
       craftctl set version="$(git describe --tags --always --dirty 2>/dev/null || echo 'unknown')"
     override-build: |
       set -eux
-
-      # Ubuntu 24.04 ships cmake 3.28 but upstream requires 3.30+
-      pip install --quiet cmake
 
       cmake \
         -S Source/ZXSpectrum \
