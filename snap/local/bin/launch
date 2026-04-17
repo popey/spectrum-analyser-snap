@@ -1,16 +1,26 @@
-#!/bin/bash -x 
+#!/bin/bash
+# Launcher for spectrum-analyser snap
+# Seeds per-user data on first run, then executes the app.
 
-for f in imgui.ini GlobalConfig.json; do
-  if ! test -f "$SNAP_USER_DATA"/"$f"; then
-    cp "$SNAP"/"$f" "$SNAP_USER_DATA"/"$f"
+# Copy seed files to user data dir if not already present
+for f in imgui.ini GlobalConfig.json RomInfo.json; do
+  if [ -e "$SNAP/$f" ] && [ ! -e "$SNAP_USER_DATA/$f" ]; then
+    cp "$SNAP/$f" "$SNAP_USER_DATA/$f"
   fi
 done
 
+# Copy seed dirs to user data dir if not already present
+for d in Lua Fonts; do
+  if [ -d "$SNAP/$d" ] && [ ! -e "$SNAP_USER_DATA/$d" ]; then
+    cp -a "$SNAP/$d" "$SNAP_USER_DATA/$d"
+  fi
+done
+
+# Create expected working directories
 for d in SpectrumGames SpectrumAnalyserProjects Pokes RZX; do
-  if [ ! -d "$SNAP_USER_DATA"/"$d" ]; then
-    mkdir -p "$SNAP_USER_DATA"/"$d"
-  fi
+  mkdir -p "$SNAP_USER_DATA/$d"
 done
 
+# Run from user data dir so relative paths in GlobalConfig work
 cd "$SNAP_USER_DATA"
-"$SNAP"/SpectrumAnalyser "$@"
+exec "$SNAP/SpectrumAnalyser" "$@"
