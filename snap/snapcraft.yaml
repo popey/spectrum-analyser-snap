@@ -1,14 +1,18 @@
 name: spectrum-analyser
 base: core22
-version: v0.2.0-alpha-master
+adopt-info: spectrum-analyser
 summary: Spectrum Analyser
 license: MIT
 description: |
   Spectrum Analyser is a tool that is designed to help reverse engineer
   ZX Spectrum games & programs.
+
   It is a combination of an emulator, debugger & interactive disassembler.
   Programs are loaded and run in the emulator and their state can be
   inspected using the tools provided.
+
+  Copy game files (*.z80, *.sna) to ~/snap/spectrum-analyser/current/SpectrumGames
+
 grade: stable
 confinement: strict
 
@@ -65,78 +69,76 @@ parts:
     plugin: nil
     source: https://github.com/TheGoodDoktor/8BitAnalysers.git
     source-type: git
+    source-submodules:
+      - Source/Vendor/chips
+      - Source/Vendor/glfw
+      - Source/Vendor/imgui
+      - Source/Vendor/implot
+      - Source/Vendor/json
+      - Source/Vendor/luasrc
+      - Source/Vendor/stb
+      - Source/Vendor/tinydir
+      - Source/Vendor/ImGuiColorTextEdit
+      - Source/Vendor/magic_enum
+      - Source/Vendor/zlib
+      - Source/Vendor/imgui_lua_bindings
     build-packages:
+      - apt-transport-https
       - build-essential
-      - cmake
+      - ca-certificates
+      - curl
+      - gnupg
       - libasound2-dev
+      - libegl-mesa0
       - libgl1-mesa-dev
       - libx11-dev
       - libxcursor-dev
+      - libxext-dev
+      - libxfixes-dev
       - libxi-dev
       - libxinerama-dev
       - libxrandr-dev
       - libxxf86vm-dev
+      - software-properties-common
+    override-pull: |
+      craftctl default
+      craftctl set version="$(git describe --tags --always --dirty 2>/dev/null || echo 'unknown')"
     override-build: |
       set -eux
 
-      cmake -S Source/ZXSpectrum -B build -DCMAKE_BUILD_TYPE=Release
-      cmake --build build -j"${SNAPCRAFT_PARALLEL_BUILD_COUNT:-1}"
+      # core22 ships cmake 3.22 but upstream requires 3.30+. Install from Kitware.
+      curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc \
+        | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg
+      echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' \
+        > /etc/apt/sources.list.d/kitware.list
+      apt-get update -qq
+      apt-get install -y cmake
 
-      install -Dm755 build/bin/SpectrumAnalyser "$SNAPCRAFT_PART_INSTALL/SpectrumAnalyser"
-      install -Dm644 Data/SpectrumAnalyser/imgui.ini "$SNAPCRAFT_PART_INSTALL/imgui.ini"
+      cmake \
+        -S Source/ZXSpectrum \
+        -B _build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGLFW_BUILD_WAYLAND=OFF \
+        -DGLFW_BUILD_DOCS=OFF \
+        -DGLFW_INSTALL=OFF
 
-      # Current upstream ships these; the published snap did not, but it likely
-      # should have.
-      install -Dm644 Data/SpectrumAnalyser/RomInfo.json "$SNAPCRAFT_PART_INSTALL/RomInfo.json"
-      cp -a Data/SpectrumAnalyser/Lua "$SNAPCRAFT_PART_INSTALL/"
-      cp -a Data/SpectrumAnalyser/Fonts "$SNAPCRAFT_PART_INSTALL/"
+      cmake --build _build -- -j"$(nproc)"
 
-      # The published snap bundled a pre-generated GlobalConfig.json.
-      cat > "$SNAPCRAFT_PART_INSTALL/GlobalConfig.json" <<'EOF'
-      {
-          "BranchLinesDisplayMode": 1,
-          "EditLuaBaseFiles": false,
-          "EnableAudio": false,
-          "EnableLua": false,
-          "Font": "",
-          "FontSizePixels": 13,
-          "ImageScale": 1,
-          "LastGame": "",
-          "LuaBaseFiles": [
-              "Lua/LuaBase.lua",
-              "Lua/ViewerBase.lua",
-              "Lua/ZXBase.lua"
-          ],
-          "NumberMode": 2,
-          "PokesFolder": "./Pokes/",
-          "RZXFolder": "./RZX/",
-          "ShowOpcodeValues": false,
-          "ShowScanlineIndicator": false,
-          "SnapshotFolder": "./SpectrumGames/",
-          "WorkspaceRoot": "./SpectrumAnalyserProjects/"
-      }
-      EOF
+      install -Dm755 _build/bin/SpectrumAnalyser \
+        "${CRAFT_PART_INSTALL}/SpectrumAnalyser"
 
-      install -Dm755 /dev/stdin "$SNAPCRAFT_PART_INSTALL/bin/launch" <<'EOF'
-      #!/bin/bash
-      set -e
+      install -Dm644 Data/SpectrumAnalyser/imgui.ini \
+        "${CRAFT_PART_INSTALL}/imgui.ini"
+      install -Dm644 Data/SpectrumAnalyser/RomInfo.json \
+        "${CRAFT_PART_INSTALL}/RomInfo.json"
+      install -Dm644 Data/SpectrumAnalyser/SALogo.png \
+        "${CRAFT_PART_INSTALL}/SALogo.png"
 
-      for f in imgui.ini GlobalConfig.json RomInfo.json; do
-        if [ -e "$SNAP/$f" ] && [ ! -e "$SNAP_USER_DATA/$f" ]; then
-          cp "$SNAP/$f" "$SNAP_USER_DATA/$f"
-        fi
-      done
+      cp -a Data/SpectrumAnalyser/Lua   "${CRAFT_PART_INSTALL}/"
+      cp -a Data/SpectrumAnalyser/Fonts "${CRAFT_PART_INSTALL}/"
 
-      for d in SpectrumGames SpectrumAnalyserProjects Pokes RZX; do
-        mkdir -p "$SNAP_USER_DATA/$d"
-      done
+      install -Dm755 "${CRAFT_PROJECT_DIR}/snap/local/bin/launch" \
+        "${CRAFT_PART_INSTALL}/bin/launch"
 
-      for d in Lua Fonts; do
-        if [ -d "$SNAP/$d" ] && [ ! -e "$SNAP_USER_DATA/$d" ]; then
-          cp -a "$SNAP/$d" "$SNAP_USER_DATA/$d"
-        fi
-      done
-
-      cd "$SNAP_USER_DATA"
-      exec "$SNAP/SpectrumAnalyser" "$@"
-      EOF
+      install -Dm644 "${CRAFT_PROJECT_DIR}/snap/local/GlobalConfig.json" \
+        "${CRAFT_PART_INSTALL}/GlobalConfig.json"
