@@ -1,0 +1,22 @@
+{
+    "BranchLinesDisplayMode": 1,
+    "EditLuaBaseFiles": false,
+    "EnableAudio": false,
+    "EnableLua": false,
+    "Font": "",
+    "FontSizePixels": 13,
+    "ImageScale": 1,
+    "LastGame": "",
+    "LuaBaseFiles": [
+        "Lua/LuaBase.lua",
+        "Lua/ViewerBase.lua",
+        "Lua/ZXBase.lua"
+    ],
+    "NumberMode": 2,
+    "PokesFolder": "./Pokes/",
+    "RZXFolder": "./RZX/",
+    "ShowOpcodeValues": false,
+    "ShowScanlineIndicator": false,
+    "SnapshotFolder": "./SpectrumGames/",
+    "WorkspaceRoot": "./SpectrumAnalyserProjects/"
+}
