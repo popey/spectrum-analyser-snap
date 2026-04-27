@@ -16,6 +16,9 @@ description: |
 grade: stable
 confinement: strict
 
+platforms:
+  amd64:
+
 apps:
   spectrum-analyser:
     command: bin/launch
