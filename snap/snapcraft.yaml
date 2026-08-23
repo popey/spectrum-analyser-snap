@@ -104,7 +104,7 @@ parts:
       - libxxf86vm-dev
     override-pull: |
       craftctl default
-      craftctl set version="weekly-2026-08-16"
+      craftctl set version="weekly-2026-08-23"
     override-build: |
       set -eux
 
