@@ -72,7 +72,7 @@ parts:
     plugin: nil
     source: https://github.com/TheGoodDoktor/8BitAnalysers.git
     source-type: git
-    source-tag: weekly-2026-08-16
+    source-tag: weekly-2026-08-30
     source-depth: 1
     source-submodules:
       - Source/Vendor/chips
