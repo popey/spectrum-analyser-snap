@@ -28,8 +28,10 @@ take effect once these files are on the default branch.
 ## Validation and evidence
 
 `snap.yml` also runs on main pushes, PRs, manual dispatch, and Monday mornings.
-It builds with LXD, reviews the snap, then installs it in a fresh Ubuntu 24.04
-desktop VM using ghvmctl. The smoke test waits for the application's visible
+It builds with LXD, reviews the snap, then installs it in a fresh desktop VM
+using ghvmctl's default Ubuntu release. The guest release follows ghvmctl's
+tooling requirements independently of the snap's `core24` base and the
+GitHub runner OS. The smoke test waits for the application's visible
 X11 window, activates it, and checks that it remains open before capturing
 the full desktop and active window. The app is built with Wayland disabled,
 so xdotool can inspect its X11/XWayland window.

@@ -64,8 +64,8 @@ jobs:
     name: 💨 Smoke test (launch + screenshot)
     runs-on: ubuntu-24.04
     needs: build
-    env:
-      VM_SERIES: '24.04'
+    # Use ghvmctl's supported guest default, as in the other graphical snaps.
+    # Its current input tooling requires newer packages than Ubuntu 24.04 ships.
 
     timeout-minutes: 45
 
