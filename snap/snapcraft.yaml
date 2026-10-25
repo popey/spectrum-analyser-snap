@@ -1,6 +1,6 @@
 name: spectrum-analyser
 base: core24
-version: &upstream-version weekly-2026-10-18
+version: &upstream-version weekly-2026-10-25
 summary: Spectrum Analyser
 license: MIT
 description: |
