@@ -6,26 +6,41 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact commit to build and test
+        required: true
+        type: string
   schedule:
     # Weekly build on Mondays at 04:00 UTC
     - cron: '0 4 * * 1'
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   build:
     name: 🔨 Build snap
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Test release selection
+        run: python3 -m unittest discover -s tests -v
 
       - name: Build snap
         uses: snapcore/action-build@v1
         id: build
+        with:
+          snapcraft-args: --use-lxd
 
       - name: Show log on build failure
         if: failure()
@@ -38,6 +53,7 @@ jobs:
           isClassic: 'false'
 
       - name: Upload snap artifact
+        if: always() && steps.build.outputs.snap != ''
         uses: actions/upload-artifact@v4
         with:
           name: snap
@@ -46,12 +62,19 @@ jobs:
 
   smoke-test:
     name: 💨 Smoke test (launch + screenshot)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
+    env:
+      VM_SERIES: '24.04'
+
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Download snap artifact
         uses: actions/download-artifact@v4
@@ -73,26 +96,67 @@ jobs:
           sudo snap connect ghvmctl:lxd lxd:lxd
 
       - name: Prepare VM
+        id: vm
+        timeout-minutes: 15
         run: ghvmctl prepare
 
       - name: Install snap into VM
         run: |
-          SNAP_FILE=$(ls *.snap | head -1)
+          shopt -s nullglob
+          snaps=(*.snap)
+          test "${#snaps[@]}" -eq 1
+          SNAP_FILE=${snaps[0]}
           echo "Pushing $SNAP_FILE into VM..."
-          VM_NAME=$(ghvmctl exec -- hostname | tr -d '[:space:]')
+          VM_NAME=$(ghvmctl exec hostname | tr -d '[:space:]')
           lxc file push "$SNAP_FILE" "local:$VM_NAME/home/ubuntu/$SNAP_FILE"
-          ghvmctl exec -- sudo snap install --dangerous "/home/ubuntu/$SNAP_FILE"
+          ghvmctl exec sudo snap install --dangerous "/home/ubuntu/$SNAP_FILE"
+
+      - name: Prepare window check
+        run: |
+          ghvmctl exec sudo apt-get install -y xdotool
+          VM_NAME=$(ghvmctl exec hostname | tr -d '[:space:]')
+          lxc file push scripts/check-window.sh "local:$VM_NAME/home/ubuntu/check-window.sh"
 
       - name: Launch app and wait for it to render
+        timeout-minutes: 3
         run: |
           ghvmctl snap-run spectrum-analyser
-          sleep 30
+          ghvmctl exec bash /home/ubuntu/check-window.sh
 
       - name: Take screenshots
         run: |
           ghvmctl screenshot-full
           ghvmctl screenshot-window
-          ls -lh "$HOME/ghvmctl-screenshots/"
+          shopt -s nullglob
+          screens=("$HOME"/ghvmctl-screenshots/screenshot-screen*.png)
+          windows=("$HOME"/ghvmctl-screenshots/screenshot-window*.png)
+          test "${#screens[@]}" -gt 0
+          test "${#windows[@]}" -gt 0
+          for screenshot in "${screens[@]}" "${windows[@]}"; do
+            test -s "$screenshot"
+          done
+          ghvmctl exec pgrep -x SpectrumAnalyse
+
+      - name: Capture failure desktop
+        if: failure() && steps.vm.outcome == 'success'
+        continue-on-error: true
+        run: ghvmctl screenshot-full
+
+      - name: Collect application diagnostics
+        if: always() && steps.vm.outcome == 'success'
+        run: |
+          mkdir -p artifacts
+          ghvmctl exec cat /home/ubuntu/spectrum-analyser.log > artifacts/application.log 2>&1 || true
+          ghvmctl exec sudo snap connections spectrum-analyser > artifacts/connections.log 2>&1 || true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
@@ -103,17 +167,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Comment on PR with screenshot link
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `### 🧪 Smoke test ✅\n\nSnap launched successfully in a VM. 📸 Download the \`smoke-test-screenshots\` artifact from the [run](${runUrl}) to view screenshots.`
-            });
+      - name: Summarize smoke test
+        if: always()
+        env:
+          RESULT: ${{ job.status }}
+        run: |
+          echo "Desktop smoke test: $RESULT. See smoke-test-screenshots and smoke-test-logs artifacts for evidence." >> "$GITHUB_STEP_SUMMARY"
